@@ -18,7 +18,8 @@ uses
   dataobjects,
   options,
   optvalues,
-  services.wiascanner;
+  services.wiascanner,
+  services.storage;
 
 procedure Register;
 
@@ -139,11 +140,70 @@ begin
   end;
 end;
 
+procedure DoMultiScan(Req: THorseRequest; Res: THorseResponse);
+var
+  DeviceName: string;
+  FileArray: TJSONArray;
+  ScanStream: TMemoryStream;
+  SavedName: string;
+  HasMorePages: Boolean;
+begin
+  DeviceName := Req.Params['name'];
+  FileArray := TJSONArray.Create;
+  try
+    try
+      // Инициализируем ваш WIA-сканер (настройка на работу с автоподатчиком ADF)
+      // TWiaScanner.InitDevice(DeviceName, True {UseADF});
+
+      HasMorePages := True;
+
+      while HasMorePages do
+      begin
+        ScanStream := TMemoryStream.Create;
+        try
+          // Вызываем ваш метод сканирования одной страницы в JPEG поток
+          // HasMorePages := TWiaScanner.ScanNextPage(ScanStream);
+
+          // --- ДЛЯ ТЕСТА (если страниц больше нет, убрать эмуляцию): ---
+          // Эмулируем, что отсканировали одну страницу для теста
+          // (Замените этот блок на реальный вызов WIA)
+          HasMorePages := False;
+          // -------------------------------------------------------------
+
+          if ScanStream.Size > 0 then
+          begin
+            // Передаем поток в хранилище, оно вернет UUID-имя файла
+            SavedName := Storage.Store(ScanStream);
+            FileArray.Add(SavedName);
+          end;
+
+        finally
+          ScanStream.Free;
+        end;
+      end;
+
+      // Важно: Отправляем TJSONArray. Horse + Jhonson сами сериализуют его и очистят память
+      Res.Send(FileArray.AsJSON);
+
+    except
+      on E: Exception do
+      begin
+        Res.Status(500).ContentType('text/plain; charset=utf-8');
+        Res.Send('error: ' + E.Message);
+      end;
+    end;
+
+  finally
+    FileArray.Free;
+  end;
+end;
+
 procedure Register;
 begin
   THorse.Get('/devices', THorseCallback(@GetDevices));
   THorse.Get('/devices/:name/options', THorseCallback(@GetDeviceOptions));
   THorse.Get('/devices/:name/scan', THorseCallback(@DoScanDevice));
+  THorse.Get('/devices/:name/multiscan', DoMultiScan);
 end;
 
 end.

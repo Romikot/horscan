@@ -21,7 +21,7 @@ uses
   WIA_TLB, Helpers, WIAdefs,
   dataobjects,
   controllers.ping,
-  controllers.scanner, Services.WiaScanner, options, optvalues
+  controllers.scanner, Services.WiaScanner, options, optvalues, services.storage
   { you can add units after this };
 
 // отключение кэша

@@ -1,4 +1,4 @@
-program ping;
+program horscan;
 
 {$mode delphi}{$H+}
 {$CODEPAGE UTF8}

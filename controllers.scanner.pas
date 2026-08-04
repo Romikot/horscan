@@ -140,6 +140,7 @@ begin
   end;
 end;
 
+{ GET /devices/:name/multiscan - Запуск сканирования для конкретного сканера }
 procedure DoMultiScan(Req: THorseRequest; Res: THorseResponse);
 var
   DeviceName: string;

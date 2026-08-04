@@ -22,11 +22,16 @@ uses
   FPReadBMP,
   FPWriteJPEG;
 
+
+
 { Заполняет переданный список доступными сканерами в системе }
 procedure GetAvailableWiaScanners(AList: TDeviceInfoList);
 
 { Заполняет переданный список опций (DPI, Яркость, Цвет) для конкретного сканера }
 procedure GetScannerOptions(const AScannerID: string; AOptionsList: TBaseOptionList);
+
+
+procedure ConnectDevice(const AScannerID: string; AValues: TWiaValueList): IDevice;
 
 { Выполняет «тихое» сканирование и записывает JPEG-файл в переданный поток }
 procedure ScanToJpegStream(const AScannerID: string; AValues: TWiaValueList; ATargetStream: TStream);
@@ -36,7 +41,7 @@ procedure WiaVectorToJpegStream(AVector: IVector; ATargetStream: TStream);
 
 implementation
 
-{ 1. ПОЛУЧЕНИЕ СПИСКА СКАНЕРОВ }
+{ ПОЛУЧЕНИЕ СПИСКА СКАНЕРОВ }
 procedure GetAvailableWiaScanners(AList: TDeviceInfoList);
 var
   DevMgr: IDeviceManager;
@@ -78,7 +83,7 @@ begin
   end;
 end;
 
-{ 2. ПОЛУЧЕНИЕ ПАРАМЕТРОВ СКАНЕРА }
+{ ПОЛУЧЕНИЕ ПАРАМЕТРОВ СКАНЕРА }
 procedure GetScannerOptions(const AScannerID: string; AOptionsList: TBaseOptionList);
 var
   Device: IDevice;
@@ -147,7 +152,7 @@ begin
   Device := nil;
 end;
 
-{ 3. НИЗКОУРОВНЕВЫЙ ПЕРЕНОС ИЗ SAFEARRAY В TSTREAM }
+{НИЗКОУРОВНЕВЫЙ ПЕРЕНОС ИЗ SAFEARRAY В TSTREAM }
 procedure VectorToStream(AVector: IVector; Stream: TStream);
 var
   DataVariant: OleVariant;
@@ -183,7 +188,7 @@ begin
   end;
 end;
 
-{ 4. КОНВЕРТАЦИЯ В JPEG С ИСПОЛЬЗОВАНИЕМ FPIMAGE }
+{ КОНВЕРТАЦИЯ В JPEG С ИСПОЛЬЗОВАНИЕМ FPIMAGE }
 procedure WiaVectorToJpegStream(AVector: IVector; ATargetStream: TStream);
 var
   BmpMemoryStream: TMemoryStream;
@@ -225,6 +230,24 @@ begin
   end;
 end;
 
+procedure ConnectDevice(const AScannerID: string; AValues: TWiaValueList): IDevice;
+Device: IDevice;
+Items: IItems;
+Item: IItem;
+begin
+  Result := Helpers.Connect(AScannerID);
+
+  if (AValues <> nil) and (AValues.Count > 0) then
+  begin
+    for I := 0 to AValues.Count - 1 do
+    begin
+      // Объект значения сам разберется, куда лезть: в Device или в дочерний Item
+      AValues[I].Apply(Device);
+    end;
+  end;
+
+end;
+
 procedure ScanToJpegStream(const AScannerID: string; AValues: TWiaValueList; ATargetStream: TStream);
 var
   Device: IDevice;
@@ -235,18 +258,7 @@ var
   Vector: IVector;
   I: Integer;
 begin
-  Device := Helpers.Connect(AScannerID);
-
-  // КОРРЕКТИРОВКА СВОЙСТВ: Теперь передаем в Apply корневой Device!
-  if (AValues <> nil) and (AValues.Count > 0) then
-  begin
-    for I := 0 to AValues.Count - 1 do
-    begin
-      // Объект значения сам разберется, куда лезть: в Device или в дочерний Item
-      AValues[I].Apply(Device);
-    end;
-  end;
-
+  Device := ConnectDevice(AScannerID, AValues);
   // Получаем дочернюю матрицу для совершения самого трансфера картинки
   Items := Device.Get_Items;
   Item := Items.Get_Item(1);

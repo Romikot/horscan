@@ -5,10 +5,10 @@ unit daemonmapper;
 interface
 
 uses
-  Classes, SysUtils, DaemonApp;
+  Classes, SysUtils, DaemonApp, daemon;
 
 type
-  TDaemonMapper1 = class(TDaemonMapper)
+  TDaemonMap = class(TDaemonMapper)
   private
 
   public
@@ -16,13 +16,13 @@ type
   end;
 
 var
-  DaemonMapper1: TDaemonMapper1;
+  DaemonMap: TDaemonMap;
 
 implementation
 
 procedure RegisterMapper;
 begin
-  RegisterDaemonMapper(TDaemonMapper1)
+  RegisterDaemonMapper(TDaemonMap)
 end;
 
 {$R *.lfm}

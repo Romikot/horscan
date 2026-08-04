@@ -6,6 +6,8 @@
     <General>
       <Flags>
         <MainUnitHasCreateFormStatements Value="False"/>
+        <MainUnitHasTitleStatement Value="False"/>
+        <MainUnitHasScaledStatement Value="False"/>
       </Flags>
       <SessionStorage Value="InProjectDir"/>
       <Title Value="Daemon application"/>
@@ -41,14 +43,16 @@
       <Unit>
         <Filename Value="daemonmapper.pas"/>
         <IsPartOfProject Value="True"/>
-        <ComponentName Value="DaemonMapper1"/>
+        <ComponentName Value="DaemonMap"/>
+        <HasResources Value="True"/>
         <ResourceBaseClass Value="Other"/>
         <ResourceBaseClassname Value="TDaemonMapper"/>
       </Unit>
       <Unit>
         <Filename Value="daemon.pas"/>
         <IsPartOfProject Value="True"/>
-        <ComponentName Value="Daemon1"/>
+        <ComponentName Value="HorseDaemon"/>
+        <HasResources Value="True"/>
         <ResourceBaseClass Value="DataModule"/>
       </Unit>
       <Unit>
@@ -105,7 +109,7 @@
     </Target>
     <SearchPaths>
       <IncludeFiles Value="$(ProjOutDir)"/>
-      <OtherUnitFiles Value="modules"/>
+      <OtherUnitFiles Value="modules\horse-3.2.0\src;modules\horse-cors-1.0.8\src;modules\jhonson-1.2.1\src;modules"/>
       <UnitOutputDirectory Value="lib\$(TargetCPU)-$(TargetOS)"/>
     </SearchPaths>
   </CompilerOptions>

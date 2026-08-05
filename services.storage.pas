@@ -11,10 +11,10 @@ type
   TFileStorage = class
   private
     FBaseDir: string;
-    function GenerateUUIDName: string;
   public
     constructor Create(const ABaseDir: string);
 
+    function GenName: string;
     function List: TJSONArray;
     procedure Get(const AFileName: string; AOutStream: TStream);
     procedure Delete(const AFileName: string);
@@ -37,7 +37,7 @@ begin
     ForceDirectories(FBaseDir);
 end;
 
-function TFileStorage.GenerateUUIDName: string;
+function TFileStorage.GenName: string;
 var
   UID: TGUID;
 begin
@@ -102,7 +102,7 @@ var
   FileStream: TFileStream;
   NewName: string;
 begin
-  NewName := GenerateUUIDName;
+  NewName := GenName;
   AInStream.Position := 0;
 
   FileStream := TFileStream.Create(FBaseDir + NewName, fmCreate);

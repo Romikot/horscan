@@ -105,97 +105,90 @@ var
   QueryKey: string;
 begin
   name := Req.Params['name'];
-
   CoInitialize(nil);
-  ResponseStream := TMemoryStream.Create;
-  ValuesList := TWiaValueList.Create(True);
   try
+    ResponseStream := TMemoryStream.Create;
+    ValuesList := TWiaValueList.Create(True);
     try
-      // ПОЛНАЯ АВТОМАТИЗАЦИЯ: Обходим абсолютно ВСЕ query-параметры из строки URL
-      for QueryKey in Req.Query.Dictionary.Keys do
-      begin
-        // Фабрика сама найдет константу, сделает текстовый маппинг и создаст нужный TWiaValue объект
-        ValuesList.Add(TWiaValueFactory.CreateValue(QueryKey, Req.Query[QueryKey]));
+      try
+        // ПОЛНАЯ АВТОМАТИЗАЦИЯ: Обходим абсолютно ВСЕ query-параметры из строки URL
+        for QueryKey in Req.Query.Dictionary.Keys do
+        begin
+          // Фабрика сама найдет константу, сделает текстовый маппинг и создаст нужный TWiaValue объект
+          ValuesList.Add(TWiaValueFactory.CreateValue(QueryKey, Req.Query[QueryKey]));
+        end;
+
+        // Запуск сканирования
+        ScanToJpegStream(name, ValuesList, ResponseStream);
+
+        if ResponseStream.Size > 0 then
+          Res.SendFile(ResponseStream, 'scanned_document.jpg', 'image/jpeg')
+        else
+          Res.Status(400).Send('Сканер вернул пустой массив данных.');
+
+      except
+        on E: Exception do
+        begin
+          Res.Status(400).ContentType('text/plain; charset=utf-8');
+          Res.Send('Ошибка параметров сканирования: ' + E.Message);
+        end;
       end;
-
-      // Запуск сканирования
-      ScanToJpegStream(name, ValuesList, ResponseStream);
-
-      if ResponseStream.Size > 0 then
-        Res.SendFile(ResponseStream, 'scanned_document.jpg', 'image/jpeg')
-      else
-        Res.Status(400).Send('Сканер вернул пустой массив данных.');
-
-    except
-      on E: Exception do
-      begin
-        Res.Status(400).ContentType('text/plain; charset=utf-8');
-        Res.Send('Ошибка параметров сканирования: ' + E.Message);
-      end;
+    finally
+      ValuesList.Free;
+      ResponseStream.Free;
+      CoUninitialize;
     end;
-  finally
-    ValuesList.Free;
-    ResponseStream.Free;
-    CoUninitialize;
+  except
+    on E: Exception do
+      Res.Status(500).Send('Ошибка при сканировании: ' + E.Message);
   end;
 end;
 
 { GET /devices/:name/multiscan - Запуск сканирования для конкретного сканера }
 procedure DoMultiScan(Req: THorseRequest; Res: THorseResponse);
 var
-  DeviceName: string;
+  name: string;
+  ValuesList: TWiaValueList;
+  QueryKey: string;
   FileArray: TJSONArray;
   ScanStream: TMemoryStream;
   SavedName: string;
   HasMorePages: Boolean;
+  names: TStringList;
+  i: integer;
 begin
-  DeviceName := Req.Params['name'];
-  FileArray := TJSONArray.Create;
+  CoInitialize(nil);
+  name := Req.Params['name'];
   try
+    FileArray := TJSONArray.Create;
     try
-      // Инициализируем ваш WIA-сканер (настройка на работу с автоподатчиком ADF)
-      // TWiaScanner.InitDevice(DeviceName, True {UseADF});
-
-      HasMorePages := True;
-
-      while HasMorePages do
-      begin
-        ScanStream := TMemoryStream.Create;
-        try
-          // Вызываем ваш метод сканирования одной страницы в JPEG поток
-          // HasMorePages := TWiaScanner.ScanNextPage(ScanStream);
-
-          // --- ДЛЯ ТЕСТА (если страниц больше нет, убрать эмуляцию): ---
-          // Эмулируем, что отсканировали одну страницу для теста
-          // (Замените этот блок на реальный вызов WIA)
-          HasMorePages := False;
-          // -------------------------------------------------------------
-
-          if ScanStream.Size > 0 then
-          begin
-            // Передаем поток в хранилище, оно вернет UUID-имя файла
-            SavedName := Storage.Store(ScanStream);
-            FileArray.Add(SavedName);
-          end;
-
-        finally
-          ScanStream.Free;
+      ValuesList := TWiaValueList.Create(True);
+      try
+        for QueryKey in Req.Query.Dictionary.Keys do
+        begin
+          // Фабрика сама найдет константу, сделает текстовый маппинг и создаст нужный TWiaValue объект
+          ValuesList.Add(TWiaValueFactory.CreateValue(QueryKey, Req.Query[QueryKey]));
         end;
+        names := TStringList.Create;
+        try
+          Multiscan(name, ValuesList, names);
+          for i := 0 to names.Count - 1 do
+            FileArray.Add(names[i]);
+          Res.ContentType('application/json; charset=utf-8');
+          Res.Send(FileArray.AsJSON);
+        finally
+          names.Free;
+        end;
+      finally
+        ValuesList.Free;
       end;
-
-      // Важно: Отправляем TJSONArray. Horse + Jhonson сами сериализуют его и очистят память
-      Res.Send(FileArray.AsJSON);
-
-    except
-      on E: Exception do
-      begin
-        Res.Status(500).ContentType('text/plain; charset=utf-8');
-        Res.Send('error: ' + E.Message);
-      end;
+    finally
+      FileArray.Free;
+      CoUninitialize;
     end;
-
-  finally
-    FileArray.Free;
+  except
+    on E: Exception do
+      Res.Status(500).Send('Ошибка при сканировании: ' + E.Message);
   end;
 end;
 

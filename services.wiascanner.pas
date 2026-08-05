@@ -16,13 +16,15 @@ uses
   Helpers,
   options,
   optvalues,
+  services.storage,
   Horse, // Подключаем Horse для типа THorseRequest
-  // Нативные графические модули Free Pascal (работают в консоли без LCL/VCL)
+  // Нативные графические модули Free Pascal
   FPImage,
   FPReadBMP,
   FPWriteJPEG;
 
-
+type
+  EScanError = class(Exception);
 
 { Заполняет переданный список доступными сканерами в системе }
 procedure GetAvailableWiaScanners(AList: TDeviceInfoList);
@@ -31,13 +33,16 @@ procedure GetAvailableWiaScanners(AList: TDeviceInfoList);
 procedure GetScannerOptions(const AScannerID: string; AOptionsList: TBaseOptionList);
 
 
-procedure ConnectDevice(const AScannerID: string; AValues: TWiaValueList): IDevice;
+function ConnectDevice(const AScannerID: string; AValues: TWiaValueList): IDevice;
 
 { Выполняет «тихое» сканирование и записывает JPEG-файл в переданный поток }
 procedure ScanToJpegStream(const AScannerID: string; AValues: TWiaValueList; ATargetStream: TStream);
 
 { Вспомогательная изолированная процедура трансформации WIA-вектора в JPEG поток }
 procedure WiaVectorToJpegStream(AVector: IVector; ATargetStream: TStream);
+
+procedure Multiscan(const AScannerID: string; AValues: TWiaValueList; list: TStringList);
+
 
 implementation
 
@@ -230,10 +235,12 @@ begin
   end;
 end;
 
-procedure ConnectDevice(const AScannerID: string; AValues: TWiaValueList): IDevice;
-Device: IDevice;
-Items: IItems;
-Item: IItem;
+function ConnectDevice(const AScannerID: string; AValues: TWiaValueList): IDevice;
+var
+  Device: IDevice;
+  Items: IItems;
+  Item: IItem;
+  I: Integer;
 begin
   Result := Helpers.Connect(AScannerID);
 
@@ -248,31 +255,83 @@ begin
 
 end;
 
-procedure ScanToJpegStream(const AScannerID: string; AValues: TWiaValueList; ATargetStream: TStream);
+procedure InternalScan(Item: IItem; ATargetStream: TStream);
 var
-  Device: IDevice;
-  Items: IItems;
-  Item: IItem;
   TransferResult: OleVariant;
   ImgFile: IImageFile;
   Vector: IVector;
   I: Integer;
 begin
-  Device := ConnectDevice(AScannerID, AValues);
-  // Получаем дочернюю матрицу для совершения самого трансфера картинки
-  Items := Device.Get_Items;
-  Item := Items.Get_Item(1);
-
   // Запуск физического сканирования
   TransferResult := Item.Transfer(GUIDToString(WiaImgFmt_BMP));
   ImgFile := IDispatch(TransferResult) as IImageFile;
   if ImgFile = nil then
-    raise Exception.Create('Не удалось получить объект IImageFile.');
+    raise EScanError.Create('Не удалось получить объект IImageFile.');
 
   Vector := ImgFile.Get_FileData;
   WiaVectorToJpegStream(Vector, ATargetStream);
 
-  Vector := nil; ImgFile := nil; Item := nil; Items := nil; Device := nil;
+  Vector := nil; ImgFile := nil;
+end;
+
+procedure Multiscan(const AScannerID: string; AValues: TWiaValueList; list: TStringList);
+var
+  Device: IDevice;
+  Items: IItems;
+  Item: IItem;
+  PropertyItem: IProperty;
+  Stream: TStream;
+  i: Integer;
+  name: String;
+begin
+  list.Clear;
+  Device := ConnectDevice(AScannerID, AValues);
+  Items := Device.Get_Items;
+  Item := Items.Get_Item(1);
+  try
+    // Конфигурируем автоподатчик
+    PropertyItem := Device.Properties.Get_Item(WIA_DPS_DOCUMENT_HANDLING_SELECT_STR);
+    PropertyItem.Set_Value(FEEDER);
+
+    for i := 1 to 200 do
+    begin
+      stream := TMemoryStream.Create;
+      try
+        try
+          InternalScan(Item, stream);
+        except
+          on EScanError do
+            Break;
+        end;
+        name := Storage.Store(stream);
+        list.Add(name);
+      finally
+        stream.Free;
+      end;
+    end;
+
+  finally
+    Item := nil;
+    Items := nil;
+    Device := nil;
+  end;
+end;
+
+procedure ScanToJpegStream(const AScannerID: string; AValues: TWiaValueList; ATargetStream: TStream);
+var
+  Device: IDevice;
+  Items: IItems;
+  Item: IItem;
+begin
+  Device := ConnectDevice(AScannerID, AValues);
+  // Получаем дочернюю матрицу для совершения самого трансфера картинки
+  Items := Device.Get_Items;
+  Item := Items.Get_Item(1);
+  try
+    InternalScan(Item, ATargetStream);
+  finally
+    Item := nil; Items := nil;
+  end;
 end;
 
 

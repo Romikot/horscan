@@ -111,7 +111,6 @@ begin
   ValuesList := TWiaValueList.Create(True);
   try
     try
-      // ПОЛНАЯ АВТОМАТИЗАЦИЯ: Обходим абсолютно ВСЕ query-параметры из строки URL
       for QueryKey in Req.Query.Dictionary.Keys do
       begin
         // Фабрика сама найдет константу, сделает текстовый маппинг и создаст нужный TWiaValue объект
@@ -143,59 +142,56 @@ end;
 { GET /devices/:name/multiscan - Запуск сканирования для конкретного сканера }
 procedure DoMultiScan(Req: THorseRequest; Res: THorseResponse);
 var
-  DeviceName: string;
-  FileArray: TJSONArray;
-  ScanStream: TMemoryStream;
-  SavedName: string;
-  HasMorePages: Boolean;
+  name: String;
+  ScannedFiles: TStringList;
+  ValuesList: TWiaValueList;
+  QueryKey: string;
+  names: TJSONArray;
+  i: Integer;
 begin
-  DeviceName := Req.Params['name'];
-  FileArray := TJSONArray.Create;
+  name := Req.Params['name'];
+  coInitialize(nil);
   try
+    ScannedFiles := TStringList.Create;
     try
-      // Инициализируем ваш WIA-сканер (настройка на работу с автоподатчиком ADF)
-      // TWiaScanner.InitDevice(DeviceName, True {UseADF});
+      ValuesList := TWiaValueList.Create;
+      try
+        for QueryKey in Req.Query.Dictionary.Keys do
+        begin
+          // Фабрика сама найдет константу, сделает текстовый маппинг и создаст нужный TWiaValue объект
+          ValuesList.Add(TWiaValueFactory.CreateValue(QueryKey, Req.Query[QueryKey]));
+        end;
 
-      HasMorePages := True;
-
-      while HasMorePages do
-      begin
-        ScanStream := TMemoryStream.Create;
         try
-          // Вызываем ваш метод сканирования одной страницы в JPEG поток
-          // HasMorePages := TWiaScanner.ScanNextPage(ScanStream);
+          services.WIAScanner.Multiscan(name, ValuesList, ScannedFiles);
 
-          // --- ДЛЯ ТЕСТА (если страниц больше нет, убрать эмуляцию): ---
-          // Эмулируем, что отсканировали одну страницу для теста
-          // (Замените этот блок на реальный вызов WIA)
-          HasMorePages := False;
-          // -------------------------------------------------------------
-
-          if ScanStream.Size > 0 then
-          begin
-            // Передаем поток в хранилище, оно вернет UUID-имя файла
-            SavedName := Storage.Store(ScanStream);
-            FileArray.Add(SavedName);
+          // Если файлы успешно отсканированы, возвращаем список
+          names := TJSONArray.Create;
+          try
+            for i := 0 to ScannedFiles.Count - 1 do
+              names.Add(ScannedFiles[i]);
+            Res.ContentType('application/json; charset=utf-8');
+            Res.Send(names.AsJSON);
+          finally
+            names.Free;
           end;
 
-        finally
-          ScanStream.Free;
+        except
+          on E: Exception do
+          begin
+            Res.Status(500).Send('Ошибка при сканировании: ' + E.Message);
+          end;
         end;
-      end;
 
-      // Важно: Отправляем TJSONArray. Horse + Jhonson сами сериализуют его и очистят память
-      Res.Send(FileArray.AsJSON);
-
-    except
-      on E: Exception do
-      begin
-        Res.Status(500).ContentType('text/plain; charset=utf-8');
-        Res.Send('error: ' + E.Message);
+      finally
+        ValuesList.Free;
       end;
+    finally
+      ScannedFiles.Free;
     end;
 
   finally
-    FileArray.Free;
+    coUninitialize;
   end;
 end;
 

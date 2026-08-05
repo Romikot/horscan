@@ -8,6 +8,10 @@ uses
   SysUtils, Classes, fpjson, jsonparser;
 
 type
+  EFileError = class(Exception);
+  ENotFound = class(EFileError);
+
+type
   TFileStorage = class
   private
     FBaseDir: string;
@@ -73,7 +77,7 @@ var
 begin
   FullPath := FBaseDir + AFileName;
   if not FileExists(FullPath) then
-    raise Exception.CreateFmt('Файл %s не найден в хранилище', [AFileName]);
+    raise EFileError.CreateFmt('Файл %s не найден в хранилище', [AFileName]);
 
   FileStream := TFileStream.Create(FullPath, fmOpenRead or fmShareDenyWrite);
   try
@@ -91,10 +95,10 @@ begin
   if FileExists(FullPath) then
   begin
     if not DeleteFile(FullPath) then
-      raise Exception.CreateFmt('Не удалось удалить файл %s', [AFileName]);
+      raise EFileError.CreateFmt('Не удалось удалить файл %s', [AFileName]);
   end
   else
-    raise Exception.CreateFmt('Файл %s для удаления не найден', [AFileName]);
+    raise EFileError.CreateFmt('Файл %s для удаления не найден', [AFileName]);
 end;
 
 function TFileStorage.Store(AInStream: TStream): string;

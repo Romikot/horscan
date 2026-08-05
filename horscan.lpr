@@ -13,15 +13,9 @@ uses
   {$IFDEF UNIX}
   cthreads,
   {$ENDIF}
-  Classes,
-  SysUtils,
-  fphttpserver,
-  Horse,
-  Horse.CORS,
-  WIA_TLB, Helpers, WIAdefs,
-  dataobjects,
-  controllers.ping,
-  controllers.scanner, Services.WiaScanner, options, optvalues, services.storage
+  Classes, SysUtils, fphttpserver, Horse, Horse.CORS, WIA_TLB, Helpers, WIAdefs,
+  dataobjects, controllers.ping, controllers.scanner, Services.WiaScanner,
+  options, optvalues, services.storage, controllers.images
   { you can add units after this };
 
 // отключение кэша
@@ -61,6 +55,7 @@ begin
 
   controllers.ping.Register;
   controllers.scanner.Register;
+  controllers.images.Register;
 
   THorse.Listen(9000);
 end.

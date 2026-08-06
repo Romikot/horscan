@@ -8,6 +8,7 @@ interface
 uses
   SysUtils,
   Variants,
+  comObj,
   ActiveX,
   Classes,
   WIA_TLB,
@@ -25,6 +26,7 @@ uses
 
 type
   EScanError = class(Exception);
+  FeederEmpty = class(EScanError);
 
 { Заполняет переданный список доступными сканерами в системе }
 procedure GetAvailableWiaScanners(AList: TDeviceInfoList);
@@ -237,7 +239,6 @@ end;
 
 function ConnectDevice(const AScannerID: string; AValues: TWiaValueList): IDevice;
 var
-  Device: IDevice;
   Items: IItems;
   Item: IItem;
   I: Integer;
@@ -249,7 +250,7 @@ begin
     for I := 0 to AValues.Count - 1 do
     begin
       // Объект значения сам разберется, куда лезть: в Device или в дочерний Item
-      AValues[I].Apply(Device);
+      AValues[I].Apply(Result);
     end;
   end;
 
@@ -263,8 +264,17 @@ var
   I: Integer;
 begin
   // Запуск физического сканирования
-  TransferResult := Item.Transfer(GUIDToString(WiaImgFmt_BMP));
-  ImgFile := IDispatch(TransferResult) as IImageFile;
+  try
+    TransferResult := Item.Transfer(GUIDToString(WiaImgFmt_BMP));
+    ImgFile := IDispatch(TransferResult) as IImageFile;
+  except
+    on E: EOleException do
+        // Проверяем, равен ли код ошибки коду окончания бумаги
+        if Cardinal(E.ErrorCode) = Cardinal(WIA_ERROR_PAPER_EMPTY) then
+          raise FeederEmpty('Сканер говорит что лоток автоподатчика пустой')
+        else
+          raise;
+  end;
   if ImgFile = nil then
     raise EScanError.Create('Не удалось получить объект IImageFile.');
 
@@ -272,6 +282,39 @@ begin
   WiaVectorToJpegStream(Vector, ATargetStream);
 
   Vector := nil; ImgFile := nil;
+end;
+
+procedure ConfigureA4Size(Item: IItem);
+var
+  CurrentDPI: Integer;
+  A4WidthPixels: Integer;
+  A4HeightPixels: Integer;
+  DPIItem: IProperty;
+begin
+  // Текущее разрешение (DPI), установленное для сканера
+  DPIItem := Item.Properties.Get_Item(WIA_IPS_YRES_STR);
+  CurrentDPI := DPIItem.Get_Value;
+  DPIItem := nil;
+
+  // Сбрасываем начальные координаты в 0, чтобы сканировать от самого края
+  Item.Properties.Get_Item(WIA_IPS_XPOS).Set_Value(0);
+  Item.Properties.Get_Item(WIA_IPS_YPOS).Set_Value(0);
+
+  // Рассчитываем размеры листа А4 в пикселях под текущее DPI
+  // Используем Round для округления до целого пикселя
+  A4HeightPixels := Round(11692/1000 * CurrentDPI);
+
+  // Устанавливаем длину
+  try
+    Item.Properties.Get_Item(WIA_IPS_YEXTENT_STR).Set_Value(A4HeightPixels);
+  except
+    on E: Exception do
+    begin
+      // Некоторые капризные драйверы могут выдать ошибку, если значение
+      // хоть на 1 пиксель превышает физически доступную ширину линейки.
+      // На этот случай можно завернуть в try..except, чтобы приложение не падало.
+    end;
+  end;
 end;
 
 procedure Multiscan(const AScannerID: string; AValues: TWiaValueList; list: TStringList);
@@ -300,8 +343,11 @@ begin
         try
           InternalScan(Item, stream);
         except
-          on EScanError do
-            Break;
+          on FeederEmpty do
+            if list.Count = 0 then //Первый раз - лоток пуст
+              raise
+            else
+              Exit;
         end;
         name := Storage.Store(stream);
         list.Add(name);

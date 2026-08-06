@@ -57,5 +57,7 @@ begin
   controllers.scanner.Register;
   controllers.images.Register;
 
+  writeln('Local storage: ', Storage.BaseDir);
+
   THorse.Listen(9000);
 end.

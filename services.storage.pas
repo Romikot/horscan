@@ -23,6 +23,8 @@ type
     procedure Get(const AFileName: string; AOutStream: TStream);
     procedure Delete(const AFileName: string);
     function Store(AInStream: TStream): string;
+
+    property BaseDir: String read FBaseDir;
   end;
 
 var

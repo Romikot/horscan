@@ -262,22 +262,29 @@ var
   ImgFile: IImageFile;
   Vector: IVector;
   I: Integer;
+  isEmpty: boolean;
 begin
   // Запуск физического сканирования
+  TransferResult := Unassigned;
+  imgFile := nil;
+  isEmpty := False;
   try
     TransferResult := Item.Transfer(GUIDToString(WiaImgFmt_BMP));
-    ImgFile := IDispatch(TransferResult) as IImageFile;
   except
     on E: EOleException do
+    begin
+        TransferResult := Unassigned;
+        imgFile := nil;
         // Проверяем, равен ли код ошибки коду окончания бумаги
-        if Cardinal(E.ErrorCode) = Cardinal(WIA_ERROR_PAPER_EMPTY) then
-          raise FeederEmpty('Сканер говорит что лоток автоподатчика пустой')
-        else
+        isEmpty := Cardinal(E.ErrorCode) = Cardinal(WIA_ERROR_PAPER_EMPTY);
+        if not isEmpty then
           raise;
+    end;
   end;
-  if ImgFile = nil then
-    raise EScanError.Create('Не удалось получить объект IImageFile.');
+  if isEmpty then
+    raise FeederEmpty.Create('Лоток пуст');
 
+  ImgFile := IDispatch(TransferResult) as IImageFile;
   Vector := ImgFile.Get_FileData;
   WiaVectorToJpegStream(Vector, ATargetStream);
 
